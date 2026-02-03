@@ -1,10 +1,11 @@
 import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'FavoritesPage.dart';
+import 'favoritespage.dart';
+import 'database/favoriterepository.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -13,7 +14,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => MyAppState(),
+      create: (_) => MyAppState(FavoriteRepository())..loadFavorites(),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Namer App',
@@ -28,21 +29,40 @@ class MyApp extends StatelessWidget {
 }
 
 class MyAppState extends ChangeNotifier {
-  var current = WordPair.random();
+  final FavoriteRepository repository;
+
+  MyAppState(this.repository);
+
+  WordPair current = WordPair.random();
+  List<WordPair> favorites = [];
 
   void getNext() {
     current = WordPair.random();
     notifyListeners();
   }
 
-  var favorites = <WordPair>[];
+  Future<void> loadFavorites() async {
+    favorites = await repository.getAll();
+    notifyListeners();
+  }
 
-  void toggleFavorite() {
-    if (favorites.contains(current)) {
-      favorites.remove(current);
+  Future<void> toggleFavorite() async {
+    final pair = current;
+
+    if (favorites.contains(pair)) {
+      favorites.remove(pair); // update dulu
+      notifyListeners(); // refresh UI cepat
+      await repository.delete(pair);
     } else {
-      favorites.add(current);
+      favorites.add(pair);
+      notifyListeners();
+      await repository.insert(pair);
     }
+  }
+
+  Future<void> removeFavorite(WordPair pair) async {
+    await repository.delete(pair);
+    favorites.remove(pair);
     notifyListeners();
   }
 }
@@ -110,8 +130,8 @@ class _MyHomePageState extends State<MyHomePage> {
 class GeneratorPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    var pair = appState.current;
+    final appState = context.watch<MyAppState>();
+    final pair = context.select<MyAppState, WordPair>((s) => s.current);
 
     IconData icon;
     if (appState.favorites.contains(pair)) {
